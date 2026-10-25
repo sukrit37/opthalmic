@@ -6,6 +6,13 @@ Open `index.html` in a modern browser to try the interactive, static UI concept.
 
 - `index.html` — responsive case dashboard, annotation timeline, clinical-review screen, JSON/CSV demo exports, and in-page ML roadmap.
 - `ML-ROADMAP.md` — feasibility assessment, suggested modeling path, evaluation criteria, and 16-week plan based on the supplied papers.
+- `ML-ROADMAP.tex` — standalone LaTeX version of the ML roadmap.
+
+Compile the LaTeX roadmap with a standard LaTeX distribution, for example:
+
+```powershell
+pdflatex ML-ROADMAP.tex
+```
 
 ## Deploy to Vercel
 

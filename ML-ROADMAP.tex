@@ -1,0 +1,161 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=25mm]{geometry}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\definecolor{navy}{HTML}{173A55}
+\definecolor{blue}{HTML}{176FB8}
+\definecolor{pale}{HTML}{F2F7FA}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=navy,
+  urlcolor=blue,
+  pdftitle={SurgiData MVP: ML Feasibility and Action Plan},
+  pdfauthor={SurgiData}
+}
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.65em}{}
+\titleformat{\subsection}{\large\bfseries\color{navy}}{\thesubsection}{0.65em}{}
+\setlist[itemize]{leftmargin=1.5em,itemsep=3pt,topsep=4pt}
+\setlist[enumerate]{leftmargin=1.7em,itemsep=4pt,topsep=4pt}
+\renewcommand{\arraystretch}{1.22}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small SurgiData | MVP ML roadmap}
+\rhead{\small Research and annotation support}
+\cfoot{\thepage}
+\setlength{\headheight}{14pt}
+
+\newcommand{\doi}[1]{\href{https://doi.org/#1}{\texttt{#1}}}
+\newcommand{\riskbox}[1]{%
+  \par\medskip\noindent
+  \colorbox{pale}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{#1}}
+  \par\medskip
+}
+
+\title{\textcolor{navy}{SurgiData MVP}\\[0.3em]
+  \large ML Feasibility and Action Plan}
+\author{Ophthalmic Surgical Video Annotation Platform}
+\date{\today}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This roadmap proposes a staged, human-in-the-loop system for converting cataract-surgery videos into quality-checked, timestamped labels. The initial product goal is annotation productivity and dataset quality, not autonomous clinical decision-making. It summarizes feasibility, modeling choices, evaluation, a 16-week pilot plan, and data safeguards.
+\end{abstract}
+\tableofcontents
+\bigskip
+
+\section{Feasibility verdict}
+
+The annotation and dataset platform is feasible as a focused minimum viable product (MVP). A 50--100 surgery pilot can validate workflow, annotation protocol, reviewer agreement, and whether AI proposals reduce annotation time. This sample size cannot establish reliable generalization across surgeons, sites, microscopes, and acquisition settings, and is not a credible basis for training detailed anatomical segmentation from scratch.
+
+Keep Version 1 centered on:
+\begin{itemize}
+  \item surgical-case management and video review;
+  \item timestamped surgical-phase annotation;
+  \item simple instrument-presence intervals;
+  \item human correction, clinical review, and quality control; and
+  \item provenance-preserving JSON/CSV export.
+\end{itemize}
+
+Do not make anatomical segmentation, complication detection, skill scoring, outcome prediction, or intraoperative guidance launch requirements.
+
+\section{Evidence from the supplied papers}
+
+\begin{itemize}
+  \item \textbf{Cataract-1K} (\emph{Scientific Data}, 2024) reports 1,000 videos overall, phase annotations on 56 regular videos across 13 phases, and pixel-level annotations on selected frames from 30 videos. DOI: \doi{10.1038/s41597-024-03193-4}.
+  \item \textbf{Cataract-LMM} (\emph{Scientific Data}, 2026) reports 3,000 videos acquired at two centers, temporal phase labels on 150 videos across 13 phases, instance masks on selected frames, and interaction annotations on a subset. DOI: \doi{10.1038/s41597-026-07464-0}.
+\end{itemize}
+
+The labeled subsets are much smaller than the total video counts. Dataset publication does not automatically grant rights for a particular use. Verify access terms, license, consent, ethics approvals, and commercial-use permissions before acquiring or using data.
+
+\section{Recommended modeling path}
+
+\subsection{Build a dependable label foundation}
+
+Before training, ophthalmologists should agree on a phase taxonomy and written boundary rules. Track uncertain boundaries, out-of-order or skipped phases, visibility, video quality, procedure variant, surgeon, microscope/camera, frame rate, and source site. Double-annotate a stratified subset and adjudicate disagreements. Preserve original annotator labels and reviewer changes rather than overwriting history.
+
+\subsection{Phase proposals first}
+
+Begin with an offline frame-wise classifier and temporal post-processing:
+\begin{enumerate}
+  \item Sample approximately 1--2 frames per second for a first baseline; test higher sampling for short phases and transitions.
+  \item Extract features using a pretrained image/video encoder, such as an ImageNet backbone or a pretrained video transformer (for example, VideoMAE). Compare alternatives on held-out cases.
+  \item Train a lightweight temporal convolutional network such as MS-TCN as the first temporal head. Benchmark a small Transformer temporal head if data and compute support it.
+  \item Predict phase probabilities per sampled time point. Smooth short label flicker and merge adjacent predictions into intervals, while retaining uncertainty and allowing annotator edits.
+  \item Calibrate confidence and abstain or request human review on low-confidence or out-of-distribution clips. A score alone must not make a prediction appear clinically authoritative.
+\end{enumerate}
+
+This is a proposal engine for retrospective annotation, not real-time operative advice.
+
+\subsection{Instrument proposals, then segmentation only if justified}
+
+For Version 1, prefer instrument-presence labels or time intervals (e.g., phaco probe, I/A handpiece, cannula, IOL injector) over pixel masks. Start with a pretrained detector or multi-label image classifier, sample frames, aggregate predictions into intervals, and retain human correction.
+
+Add instance segmentation only after establishing a meaningful mask-labeling budget and use case. Fine-tune a modern segmentation model (for example, Mask2Former or a YOLO segmentation model) from pretrained weights and evaluate on independently annotated, surgeon/site-held-out cases. Dense pixel annotation costs substantially more than temporal labeling; a handful of frames per video is not enough to claim robust continuous segmentation.
+
+\subsection{Evaluation that answers the product question}
+
+\begin{itemize}
+  \item Split at \textbf{patient and surgeon} level; reserve a center/site for external evaluation when possible. Never randomly split frames from the same video across train and test.
+  \item Report per-phase recall, macro-F1, segmental F1 at declared temporal-IoU thresholds, and boundary timing error. Include class imbalance and confidence intervals.
+  \item For instruments, report per-class precision/recall and interval overlap; for masks, report per-class Dice/IoU and performance by site/device.
+  \item Measure annotation time per case, AI suggestion acceptance/edit/rejection, reviewer agreement, adjudication rate, and quality defects.
+  \item The primary product gate is \textbf{reduced annotation time without worse clinical label quality}, not a single headline accuracy score.
+\end{itemize}
+
+With only 50--100 local surgeries, use patient/surgeon-grouped cross-validation for internal iteration, but describe results as pilot evidence. Keep a final set untouched where possible; add cases and independent sites before making generalization claims.
+
+\section{Suggested 16-week plan}
+
+\small
+\begin{tabularx}{\linewidth}{@{}p{0.18\linewidth}p{0.12\linewidth}X@{}}
+\toprule
+\textbf{Phase} & \textbf{Timing} & \textbf{Deliverable / exit criterion} \\
+\midrule
+Governance and protocol & Weeks 0--2 & Approved access/consent path, privacy plan, phase taxonomy, instrument vocabulary, and annotation manual. \\
+Platform and baseline & Weeks 2--6 & Case intake, video review, timestamped labels, reviewer workflow, QC, versioned JSON/CSV export; measure fully manual time and agreement. \\
+Label collection & Weeks 3--8 & 50--100 cases with metadata; double-annotated, adjudicated subset; dataset inventory and split manifest. \\
+Phase model baseline & Weeks 5--9 & Pretrained encoder plus MS-TCN proposal model, patient/surgeon-grouped evaluation, confidence and abstention behavior. \\
+Instrument baseline & Weeks 8--12 & Human-correctable presence/interval suggestions for a small, well-defined instrument set. \\
+Shadow pilot & Weeks 12--16 & Trial measuring time saved, acceptance/edit rates, agreement, subgroup/site limitations, and a go/no-go decision. \\
+\bottomrule
+\end{tabularx}
+\normalsize
+
+\medskip
+Timing assumes video access and ophthalmologist annotation/review time. If approval or data access is not ready, that becomes the critical path.
+
+\section{Product and data safeguards}
+
+\begin{itemize}
+  \item Keep identifiable video out of the prototype and public demo. Production needs encrypted storage and transfer, least-privilege access, audit logs, retention/deletion controls, and a documented de-identification process.
+  \item Verify informed consent, ethics/IRB requirements, data ownership, licenses, and intended commercial use before uploading or training on any video.
+  \item Store source video separately from annotation exports. Export stable case/event IDs, schema version, timestamps, label taxonomy version, annotator/reviewer IDs, model/version, confidence, review state, and edit history.
+  \item Treat AI labels as recommendations requiring human acceptance. Version the model and log which suggestions were accepted, changed, or rejected.
+  \item Obtain clinical, privacy, regulatory, and security review before any clinical deployment or intraoperative use.
+\end{itemize}
+
+\section{Main risks}
+
+\begin{enumerate}
+  \item \textbf{Data access and rights:} may block the entire modeling schedule.
+  \item \textbf{Domain shift:} acquisition device, compression, surgeon technique, and site can change appearance and timing.
+  \item \textbf{Annotation ambiguity:} short phases, transitions, skipped steps, and disagreement can cap apparent model performance.
+  \item \textbf{Small labeled sample:} total video counts are not the same as phase-labeled video counts; segmentation needs much denser labels.
+  \item \textbf{Overclaiming:} a small internal pilot cannot establish clinical validity, generalization, or autonomous decision capability.
+\end{enumerate}
+
+\riskbox{\textbf{Bottom line.} Build the annotation workflow and label protocol first. Add AI as a human-reviewed proposal mechanism; gate progress on demonstrated annotation-time savings without reduced label quality. Keep clinical and intraoperative claims out of scope for this MVP.}
+
+\end{document}
